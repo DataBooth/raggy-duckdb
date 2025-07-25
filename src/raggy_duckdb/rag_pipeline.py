@@ -17,8 +17,8 @@ cache = dc.Cache("./cache_dir")
 
 
 class TogetherAIEmbedder:
-    def __init__(self, api_key: str, model: str):
-        self.client = Together(api_key=api_key)
+    def __init__(self, model: str):
+        self.client = Together()
         self.model = model
 
     def embed(self, texts: List[str]) -> List[np.ndarray]:
@@ -39,7 +39,9 @@ class TogetherAIEmbedder:
             api_embeddings = self.client.embeddings.create(
                 model=self.model, input=texts_to_call
             )
-            api_embs = [np.array(e, dtype=np.float32) for e in api_embeddings.data]
+            api_embs = [
+                np.array(e.embedding, dtype=np.float32) for e in api_embeddings.data
+            ]
             for idx, emb in zip(indices_to_call, api_embs):
                 cache[texts_to_call[idx]] = emb
                 results[idx] = emb
@@ -47,8 +49,8 @@ class TogetherAIEmbedder:
 
 
 class TogetherAILLM:
-    def __init__(self, api_key: str, model: str):
-        self.client = Together(api_key=api_key)
+    def __init__(self, model: str):
+        self.client = Together()
         self.model = model
 
     def generate(self, prompt: str) -> str:
@@ -80,7 +82,7 @@ class RAGPipeline:
         top_k: int = 5,
     ):
         """
-        Initialize RAGPipeline with config and establish DuckDB connection and AI clients.
+        Initialise RAGPipeline with config and establish DuckDB connection and AI clients.
 
         Args:
             duckdb_path (str): Path to DuckDB database file.
@@ -96,11 +98,9 @@ class RAGPipeline:
             top_k (int): Number of top relevant chunks to retrieve for queries.
         """
         self.con = duckdb.connect(database=duckdb_path)
-        self.embedder = TogetherAIEmbedder(
-            api_key=embedder_api_key, model=embedding_model
-        )
-        self.llm = TogetherAILLM(api_key=embedder_api_key, model=llm_model)
-        self.repo_root_path = repo_root_path
+        self.embedder = TogetherAIEmbedder(model=embedding_model)
+        self.llm = TogetherAILLM(model=llm_model)
+        self.repo_root_path = Path.home() / "code" / "github"
         self.included_subdirs = included_subdirs
         self.file_types = file_types
         self.n_repo = n_repo
@@ -109,20 +109,25 @@ class RAGPipeline:
         self.top_k = top_k
 
         self._setup_db()
-        logger.info("RAGPipeline initialized")
+        logger.info("RAGPipeline initialised")
 
     def _setup_db(self) -> None:
+        # Create sequence if not exists
+        self.con.execute("CREATE SEQUENCE IF NOT EXISTS id_sequence START 1;")
+
+        # Create table with id defaulting to nextval of sequence
         self.con.execute("""
             CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER DEFAULT nextval('id_sequence'),
                 repo TEXT,
                 filepath TEXT,
                 chunk_index INTEGER,
                 content TEXT,
-                embedding BLOB
+                embedding BLOB,
+                PRIMARY KEY(id)
             )
         """)
-        logger.info("Database schema ensured")
+        logger.info("Database schema and sequence ensured")
 
     def discover_repos(self) -> List[str]:
         candidates = []
@@ -133,15 +138,36 @@ class RAGPipeline:
             search_path = (self.repo_root_path / subdir).glob("*")
             found = [str(p.resolve()) for p in search_path if p.is_dir()]
             candidates.extend(found)
+            candidates.sort()
         if self.n_repo is not None:
             candidates = candidates[: self.n_repo]
         logger.info(f"Discovered {len(candidates)} repos to ingest")
         return candidates
 
-    def _collect_files_from_repo(self, repo_path: str) -> List[Tuple[str, str]]:
+    def _collect_files_from_repo(self, repo_path: str) -> list[tuple[str, str]]:
+        """
+        Collect files matching allowed extensions from `repo_path`, excluding certain folders like `.venv`.
+
+        Args:
+            repo_path (str): path to the repo dir.
+
+        Returns:
+            list of tuples (relative_filepath, file_content)
+        """
+        exclude_dirs = {
+            ".venv",
+            "__pycache__",
+            ".git",
+            "data",
+            "logs",
+            "cache_dir",
+        }  # add any other folders to exclude
         files_collected = []
+
         repo_path_obj = Path(repo_path)
         for file_path in repo_path_obj.rglob("*"):
+            if any(part in exclude_dirs for part in file_path.parts):
+                continue  # skip files inside excluded directories
             if file_path.is_file() and any(
                 file_path.name.lower().endswith(ext.lower()) for ext in self.file_types
             ):
@@ -151,8 +177,9 @@ class RAGPipeline:
                     files_collected.append((rel_path, content))
                 except Exception as e:
                     logger.warning(f"Failed to read {file_path}: {e}")
+
         logger.info(
-            f"Collected {len(files_collected)} files from repo {repo_path_obj.name}"
+            f"Collected {len(files_collected)} files from repo {repo_path_obj.name} (excluding {exclude_dirs})"
         )
         return files_collected
 
@@ -171,27 +198,26 @@ class RAGPipeline:
             start += self.chunk_size - self.chunk_overlap
         return chunks
 
-
-def ingest_repos(self) -> None:
-    """
-    Discover repos and ingest their allowed files into DuckDB as chunked documents.
-    Embeddings are not computed here.
-    """
-    repos = self.discover_repos()
-    logger.info("Starting ingestion of repos")
-    for repo_path_str in repos:
-        repo_path = Path(repo_path_str)
-        repo_name = repo_path.name  # equivalent to os.path.basename()
-        files = self._collect_files_from_repo(str(repo_path))
-        for filepath, content in files:
-            chunks = self._chunk_text(content)
-            for idx, chunk in enumerate(chunks):
-                self.con.execute(
-                    "INSERT INTO documents (repo, filepath, chunk_index, content, embedding) VALUES (?, ?, ?, ?, NULL)",
-                    [repo_name, filepath, idx, chunk],
-                )
-        logger.info(f"Ingested repo {repo_name} with {len(files)} files")
-    logger.info("Completed ingestion for all repos")
+    def ingest_repos(self) -> None:
+        """
+        Discover repos and ingest their allowed files into DuckDB as chunked documents.
+        Embeddings are not computed here.
+        """
+        repos = self.discover_repos()
+        logger.info("Starting ingestion of repos")
+        for repo_path_str in repos:
+            repo_path = Path(repo_path_str)
+            repo_name = repo_path.name  # equivalent to os.path.basename()
+            files = self._collect_files_from_repo(str(repo_path))
+            for filepath, content in files:
+                chunks = self._chunk_text(content)
+                for idx, chunk in enumerate(chunks):
+                    self.con.execute(
+                        "INSERT INTO documents (repo, filepath, chunk_index, content, embedding) VALUES (?, ?, ?, ?, NULL)",
+                        [repo_name, filepath, idx, chunk],
+                    )
+            logger.info(f"Ingested repo {repo_name} with {len(files)} files")
+        logger.info("Completed ingestion for all repos")
 
     def embed_documents(self, batch_size: int = 32) -> None:
         """
@@ -267,7 +293,7 @@ def ingest_repos(self) -> None:
 
 
 def main():
-    config = load_config(config_path="conf/config.roml")
+    config = load_config(config_path="conf/config.toml")
     log_conf = config.get("logging", {})
     setup_logger(
         log_file=log_conf.get("log_file", "logs/rag_app.log"),
@@ -299,14 +325,12 @@ def main():
     # Step 1: Discover, parse, chunk, and ingest repo files into DuckDB
     pipeline.ingest_repos()
 
-    logger.info("Ingestion complete. Verify DuckDB contents now before proceeding.")
+    # logger.info("Ingestion complete. Verify DuckDB contents now before proceeding.")
 
-    # Step 2: (Commented out for now)
-    # Embed documents without embeddings
-    # pipeline.embed_documents()
+    # Step 2: Embed documents without embeddings
+    pipeline.embed_documents()
 
-    # Step 3: (Commented out for now)
-    # Query example
+    # Step 3: Query example
     # user_query = "How does the authentication work in the databooth repo?"
     # answer = pipeline.query(user_query)
     # print(f"Query: {user_query}\nAnswer:\n{answer}")

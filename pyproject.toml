@@ -22,3 +22,8 @@ raggy-duckdb = "raggy_duckdb:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "marimo>=0.14.13",
+]
