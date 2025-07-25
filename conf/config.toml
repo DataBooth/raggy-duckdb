@@ -1,0 +1,26 @@
+[db]
+# Path to the DuckDB database file used to store repo documents and embeddings
+duckdb_path = "repos.duckdb"
+
+[together]
+# Together.ai API key - recommended to be set in environment and loaded securely
+# e.g. export TOGETHER_API_KEY="your_actual_api_key" (in .env)
+embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
+llm_model = "togethercomputer/llama-3-70b-chat"
+
+[ingestion]
+# Root directory where your local cloned GitHub repos reside
+repo_root_path = "/home/mjboothaus/code/github"
+# Limit the number of repos to ingest; set to null to include all discovered
+n_repo = 2
+# List of subdirectories under repo_root_path to scan for repos
+included_subdirs = ["databooth", "mjboothaus"]
+# List of file extensions to include in ingestion; case-insensitive
+file_types = [".py", ".md", ".rst"]
+
+[logging]
+# Log file path with rotation
+log_file = "logs/rag_app.log"
+log_level = "INFO"
+rotation = "10 MB"
+retention = "7 days"
