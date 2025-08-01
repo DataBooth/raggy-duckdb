@@ -1,0 +1,35 @@
+# config_ollama.toml
+# Configuration for running the RAG pipeline using Ollama as the local LLM and embedding provider
+[paths]
+# Root directory where your cloned repositories reside
+repo_root_path = "/Users/mjboothaus/code/github/mjboothaus"
+# Path for DuckDB database file (can be inside tests or your desired folder)
+duckdb_db_path = "data/test_ollama.duckdb"
+# Local cache directory for diskcache usage
+cache_dir = "cache_tests_dir"
+# Optional: included subdirectories under repo_root_path to scan (empty string means root)
+included_subdirs = [""] # or ["subdir1", "subdir2"]
+# Optional: allowed file extensions to ingest
+file_types = [".py", ".md", ".txt"]
+# Optional: number of repos to ingest (null or omitted means all)
+n_repo = 10
+# Chunking parameters
+chunk_size = 512
+chunk_overlap = 64
+# Number of top matching chunks to retrieve in queries
+top_k = 5
+
+[provider]
+# Select Ollama as the backend provider
+name = "ollama"
+# Ollama embedding model
+embedding_model = "nomic-embed-text"
+# Ollama LLM/chat model
+llm_model = "llama2"
+
+[ollama]
+# URL of your local Ollama server - adjust if different (default port 11434)
+api_endpoint = "http://localhost:11434"
+# Optional: Context length override (must match your Ollama server if needed)
+# context_length = 8192
+# Additional Ollama-specific settings can go here if your client supports them

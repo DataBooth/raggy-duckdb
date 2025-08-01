@@ -24,3 +24,13 @@ log_file = "logs/rag_app.log"
 log_level = "INFO"
 rotation = "10 MB"
 retention = "7 days"
+
+[paths]
+repo_root_path = "tests/sample_repos"
+duckdb_db_path = "tests/test.duckdb"
+cache_dir = "tests/cache_dir"
+
+[provider]
+name = "ollama" # "together" or "ollama"
+embedding_model = "nomic-embed-text"
+llm_model = "llama2"

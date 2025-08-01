@@ -3,6 +3,8 @@
 *.duckdb
 *.duckdb.wal
 cache_dir/
+.vscode/
+cache_tests_dir/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

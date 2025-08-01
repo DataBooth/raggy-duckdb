@@ -1,12 +1,12 @@
 import marimo
 
 __generated_with = "0.14.13"
-app = marimo.App()
+app = marimo.App(width="full")
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""Check the data loaded from repos into DuckDB""")
+    mo.md(r"""## Check the data loaded from repos into DuckDB""")
     return
 
 
@@ -14,6 +14,7 @@ def _(mo):
 def _():
     import marimo as mo
     import duckdb
+    import pandas as pd
     return duckdb, mo
 
 
@@ -85,8 +86,20 @@ def _(duckdb, queries):
 
 @app.cell
 def _(run_queries):
-    db_path = "repos.duckdb"  
+    db_path = "data/test_ollama.duckdb"  
     run_queries(db_path)
+    return
+
+
+@app.cell
+def _(duckdb):
+    con = duckdb.connect("data/test_ollama.duckdb")
+    return (con,)
+
+
+@app.cell
+def _(con):
+    con.sql("SELECT * FROM documents").df()
     return
 
 
