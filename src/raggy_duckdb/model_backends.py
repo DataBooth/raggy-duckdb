@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 from together import Together
 
 
+load_dotenv()  # Reads .env file if present
+
+
 # Embedding backend base class
 class EmbeddingBackend:
     def embed(self, texts):
@@ -14,7 +17,6 @@ class EmbeddingBackend:
 
 class TogetherEmbeddingBackend(EmbeddingBackend):
     def __init__(self, model):
-        load_dotenv()  # Reads .env file if present
         api_key = os.getenv("TOGETHER_API_KEY")
         if not api_key:
             raise RuntimeError("Set TOGETHER_API_KEY in your environment or .env file.")
@@ -47,7 +49,6 @@ class LLMBackend:
 
 class TogetherLLMBackend(LLMBackend):
     def __init__(self, model):
-        load_dotenv()  # Reads .env file if present
         api_key = os.getenv("TOGETHER_API_KEY")
         if not api_key:
             raise RuntimeError("Set TOGETHER_API_KEY in your environment or .env file.")
